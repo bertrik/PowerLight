@@ -156,12 +156,7 @@ void loop(void)
     if (period != period_last) {
         period_last = period;
 
-        // fetch JSON with fractions
-        // ...
-
-        // draw it on the ring
-        // ...
-
+        fetch_energy();
     }
     // parse command line
     while (Serial.available()) {
