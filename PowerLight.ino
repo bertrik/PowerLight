@@ -12,7 +12,7 @@
 
 #define printf Serial.printf
 #define POLL_INTERVAL   60000L
-#define NUM_LEDS        7
+#define NUM_LEDS        40
 
 #define DATA_PIN_LED    D4
 
@@ -139,6 +139,7 @@ void setup(void)
     // configure LED ring    
     FastLED.addLeds < WS2812B, DATA_PIN_LED, GRB > (ledring,
                                                     NUM_LEDS).setCorrection(TypicalSMD5050);
+    FastLED.setBrightness(64);
     FastLED.showColor(CRGB::Black);
 
     // connect to wifi
