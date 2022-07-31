@@ -4,6 +4,9 @@
 #include <FastLED.h>
 #include <ArduinoJson.h>
 
+#include <EEPROM.h>
+#include <ArduinoOTA.h>
+
 #include "WiFiManager.h"
 #include "FastLED.h"
 
@@ -16,11 +19,25 @@
 
 #define DATA_PIN_LED    D4
 
+typedef struct {
+    char ota_password[64];
+} savedata_t;
+
+static savedata_t savedata;
+
 static WiFiManager wifiManager;
+static WiFiManagerParameter otaPasswordParam("otapassword", "OTA password", "power", sizeof(savedata_t) - 1);
 static WiFiClient wifiClient;
 static CRGB ledring[NUM_LEDS];
 static char espid[64];
 static char line[120];
+
+static void wifiSaveConfigCallback(void)
+{
+    strcpy(savedata.ota_password, otaPasswordParam.getValue());
+    EEPROM.put(0, savedata);
+    EEPROM.commit();
+}
 
 static bool fetch_url(const char *host, int port, const char *path, String & response)
 {
@@ -130,6 +147,9 @@ static int do_help(int argc, char *argv[])
 
 void setup(void)
 {
+    EEPROM.begin(sizeof(savedata));
+    EEPROM.get(0, savedata);
+
     snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
 
     Serial.begin(115200);
@@ -144,8 +164,12 @@ void setup(void)
 
     // connect to wifi
     printf("Starting WIFI manager (%s)...\n", WiFi.SSID().c_str());
+    wifiManager.addParameter(&otaPasswordParam);
+    wifiManager.setSaveConfigCallback(wifiSaveConfigCallback);
     wifiManager.setConfigPortalTimeout(120);
     wifiManager.autoConnect("ESP-POWERLIGHT");
+
+    ArduinoOTA.begin();
 }
 
 void loop(void)
@@ -182,4 +206,5 @@ void loop(void)
             printf(">");
         }
     }
+    ArduinoOTA.handle();
 }
