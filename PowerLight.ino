@@ -35,7 +35,6 @@ static CRGB ledring[NUM_LEDS];
 static char espid[64] { 0 };
 static char line[120] { 0 };
 static PubSubClient mclient(wifiClient);
-static bool showRing = false;
 static bool prevState = false;
 static bool updating = false;
 
