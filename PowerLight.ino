@@ -37,6 +37,7 @@ static char line[120] { 0 };
 static PubSubClient mclient(wifiClient);
 static bool showRing = false;
 static bool prevState = false;
+static bool updating = false;
 
 static void mcallback(char *topic, byte *payload, unsigned int length)
 {
@@ -180,7 +181,7 @@ void setup(void)
     FastLED.addLeds < WS2812B, DATA_PIN_LED, GRB > (ledring,
                                                     NUM_LEDS).setCorrection(TypicalSMD5050);
     FastLED.setBrightness(DEFAULT_BRIGHTNESS);
-    FastLED.showColor(CRGB::Pink);
+    FastLED.showColor(CRGB::DarkOrange);
 
     // connect to wifi
     printf("Starting WIFI manager (%s)...\n", WiFi.SSID().c_str());
@@ -188,6 +189,23 @@ void setup(void)
     wifiManager.setSaveConfigCallback(wifiSaveConfigCallback);
     wifiManager.setConfigPortalTimeout(120);
     wifiManager.autoConnect("ESP-POWERLIGHT");
+
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        if (!updating) {
+            memset(ledring, 0x00, sizeof ledring);
+
+            FastLED.show();
+
+            updating = true;
+
+            FastLED.setBrightness(DEFAULT_BRIGHTNESS);
+        }
+
+        for(unsigned i=0; i<progress * NUM_LEDS / total; i++)
+            ledring[i] = CRGB::Pink;
+
+        FastLED.show();
+    });
 
     ArduinoOTA.begin();
 
@@ -202,16 +220,19 @@ void loop(void)
     mclient.loop();
 
     if (!mclient.connected()) {
-        Serial.println("Attempting MQTT connection... ");
+        Serial.println(F("Attempting MQTT connection... "));
 
-        if (mclient.connect("powerlight"))
+        if (mclient.connect("powerlight")) {
             mclient.subscribe("space/statedigit");
+
+            Serial.println(F("Connected to MQTT server"));
+        }
     }
 
     // fetch a new value every POLL_INTERVAL
     static unsigned int period_last = -1;
     unsigned int period = millis() / POLL_INTERVAL;
-    if (period != period_last) {
+    if (period != period_last && updating == false) {
         period_last = period;
 
         fetch_energy();
