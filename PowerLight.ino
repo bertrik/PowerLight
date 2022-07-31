@@ -7,6 +7,8 @@
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
 
+#include <PubSubClient.h>
+
 #include "WiFiManager.h"
 #include "FastLED.h"
 
@@ -16,6 +18,7 @@
 #define printf Serial.printf
 #define POLL_INTERVAL   60000L
 #define NUM_LEDS        60
+#define DEFAULT_BRIGHTNESS 32
 
 #define DATA_PIN_LED    D4
 
@@ -29,8 +32,23 @@ static WiFiManager wifiManager;
 static WiFiManagerParameter otaPasswordParam("otapassword", "OTA password", "power", sizeof(savedata_t) - 1);
 static WiFiClient wifiClient;
 static CRGB ledring[NUM_LEDS];
-static char espid[64];
-static char line[120];
+static char espid[64] { 0 };
+static char line[120] { 0 };
+static PubSubClient mclient(wifiClient);
+static bool showRing = false;
+static bool prevState = false;
+
+static void mcallback(char *topic, byte *payload, unsigned int length)
+{
+    bool showRing = payload[0] == '1';
+
+    if (showRing != prevState) {
+        FastLED.setBrightness(showRing ? DEFAULT_BRIGHTNESS : 0);
+        FastLED.show();
+
+        prevState = showRing;
+    }
+}
 
 static void wifiSaveConfigCallback(void)
 {
@@ -78,8 +96,10 @@ static void process_message(DynamicJsonDocument & doc)
                 ledring[i] = color;
             }
         }
+
         index = next;
     }
+
     FastLED.show();
 }
 
@@ -159,8 +179,8 @@ void setup(void)
     // configure LED ring    
     FastLED.addLeds < WS2812B, DATA_PIN_LED, GRB > (ledring,
                                                     NUM_LEDS).setCorrection(TypicalSMD5050);
-    FastLED.setBrightness(32);
-    FastLED.showColor(CRGB::Black);
+    FastLED.setBrightness(DEFAULT_BRIGHTNESS);
+    FastLED.showColor(CRGB::Pink);
 
     // connect to wifi
     printf("Starting WIFI manager (%s)...\n", WiFi.SSID().c_str());
@@ -170,10 +190,24 @@ void setup(void)
     wifiManager.autoConnect("ESP-POWERLIGHT");
 
     ArduinoOTA.begin();
+
+    mclient.setServer("mqtt.vm.nurd.space", 1883);
+    mclient.setCallback(mcallback);
+
+    FastLED.showColor(CRGB::Black);
 }
 
 void loop(void)
 {
+    mclient.loop();
+
+    if (!mclient.connected()) {
+        Serial.println("Attempting MQTT connection... ");
+
+        if (mclient.connect("powerlight"))
+            mclient.subscribe("space/statedigit");
+    }
+
     // fetch a new value every POLL_INTERVAL
     static unsigned int period_last = -1;
     unsigned int period = millis() / POLL_INTERVAL;
@@ -182,6 +216,7 @@ void loop(void)
 
         fetch_energy();
     }
+
     // parse command line
     while (Serial.available()) {
         char c = Serial.read();
@@ -206,5 +241,6 @@ void loop(void)
             printf(">");
         }
     }
+
     ArduinoOTA.handle();
 }
