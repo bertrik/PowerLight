@@ -43,6 +43,8 @@ bool EditLine(char cin, char *cout)
     case 0x08:                 // backspace
         if (pos > 0) {
             pos--;
+        } else {
+            *cout = 0x07;       // bell
         }
         break;
     default:
