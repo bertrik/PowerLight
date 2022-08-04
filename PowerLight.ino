@@ -139,7 +139,7 @@ void setup(void)
     // configure LED ring    
     FastLED.addLeds < WS2812B, DATA_PIN_LED, GRB > (ledring,
                                                     NUM_LEDS).setCorrection(TypicalSMD5050);
-    FastLED.setBrightness(64);
+    FastLED.setBrightness(32);
     FastLED.showColor(CRGB::Black);
 
     // connect to wifi
