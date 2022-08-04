@@ -89,7 +89,7 @@ static bool fetch_energy(void)
     String response;
 
     // fetch
-    if (fetch_url("stofradar.nl", 9001, "/energy/latest", response)) {
+    if (fetch_url("stofradar.nl", 9001, "/electricity/generation", response)) {
         // decode
         if (deserializeJson(doc, response) == DeserializationError::Ok) {
             process_message(doc);
