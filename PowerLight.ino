@@ -12,13 +12,16 @@
 
 #define printf Serial.printf
 #define POLL_INTERVAL   60000L
-#define NUM_LEDS        40
 
-#define DATA_PIN_LED    D4
+#define PIN_LED_OUT    D3
+#define PIN_LED_IN     D2
+
+#define MAX_LEDS       60
 
 static WiFiManager wifiManager;
 static WiFiClient wifiClient;
-static CRGB ledring[NUM_LEDS];
+static CRGB ledring[MAX_LEDS + 1];
+static int num_pixels = MAX_LEDS;
 static char espid[64];
 static char line[120];
 
@@ -52,12 +55,12 @@ static void process_message(DynamicJsonDocument & doc)
         const char *item_color = item["color"]; // "#FFFF00", "#0000FF", "#FF0000", "#FF00FF", ...
 
         energy += item_power;
-        next = (NUM_LEDS * energy) / total;
+        next = (num_pixels * energy) / total;
         printf("led %2d-%2d: %s (%s)\n", index, next, item_color, item_id);
         for (int i = index; i < next; i++) {
             uint32_t rgb = strtoul(item_color + 1, NULL, 16);
             CRGB color = CRGB(rgb);
-            if (i < NUM_LEDS) {
+            if (i < num_pixels) {
                 ledring[i] = color;
             }
         }
@@ -106,6 +109,44 @@ static int do_get(int argc, char *argv[])
     return CMD_OK;
 }
 
+static volatile int int_count;
+
+static void ICACHE_RAM_ATTR led_in_interrupt(void)
+{
+    int_count++;
+}
+
+static int ring_probe(int pin_out, struct CRGB *data, int n)
+{
+    int_count = 0;
+    FastLED.addLeds < WS2812B, PIN_LED_OUT, GRB > (data, n);
+    FastLED.showColor(CRGB::Black);
+    return int_count;
+}
+
+static int ring_autodetect(int pin_out, int pin_in, struct CRGB *pixels, int maxLeds)
+{
+    // binary search to find the led ring size
+    int low = 1;
+    int high = maxLeds + 1;
+    pinMode(pin_in, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(pin_in), led_in_interrupt, FALLING);
+    while ((high - low) > 1) {
+        int n = (low + high) / 2;
+        int overflow = ring_probe(pin_out, pixels, n);
+        if (overflow) {
+            high = n;
+        } else {
+            low = n;
+        }
+    }
+    detachInterrupt(digitalPinToInterrupt(pin_in));
+
+    // leave initialized
+    ring_probe(pin_out, pixels, low);
+    return low;
+}
+
 static void show_help(const cmd_t * cmds)
 {
     for (const cmd_t * cmd = cmds; cmd->cmd != NULL; cmd++) {
@@ -130,17 +171,21 @@ static int do_help(int argc, char *argv[])
 
 void setup(void)
 {
-    snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
-
     Serial.begin(115200);
     printf("\nPOWERLIGHT\n");
-    EditInit(line, sizeof(line));
 
-    // configure LED ring    
-    FastLED.addLeds < WS2812B, DATA_PIN_LED, GRB > (ledring,
-                                                    NUM_LEDS).setCorrection(TypicalSMD5050);
+    EditInit(line, sizeof(line));
+    snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
+
+    // autodetect the ring size, then show a colour gradient
+    num_pixels = ring_autodetect(PIN_LED_OUT, PIN_LED_IN, ledring, MAX_LEDS);
+    printf("Detected %d-pixel ring\n", num_pixels);
+    for (int i = 0; i < 256; i++) {
+        int n = num_pixels * i / 256;
+        ledring[n] = CHSV(i, 255, 255);
+    }
     FastLED.setBrightness(32);
-    FastLED.showColor(CRGB::Black);
+    FastLED.show();
 
     // connect to wifi
     printf("Starting WIFI manager (%s)...\n", WiFi.SSID().c_str());
@@ -155,7 +200,6 @@ void loop(void)
     unsigned int period = millis() / POLL_INTERVAL;
     if (period != period_last) {
         period_last = period;
-
         fetch_energy();
     }
     // parse command line
