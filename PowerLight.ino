@@ -13,8 +13,8 @@
 #define printf Serial.printf
 #define POLL_INTERVAL   60000L
 
-#define PIN_LED_OUT    D3
-#define PIN_LED_IN     D2
+#define PIN_LED_OUT    D3       // to DIN on the LED strip
+#define PIN_LED_IN     D2       // to DOUT on the LED strip
 
 #define MAX_LEDS       60
 
