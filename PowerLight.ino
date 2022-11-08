@@ -46,7 +46,6 @@ static bool fetch_url(const char *host, int port, const char *path, String & res
 static void process_message(DynamicJsonDocument & doc)
 {
     long energy = 0;
-    int next = 0;
     int index = 0;
     int total = doc["total"];
     for (JsonObject item:doc["mix"].as < JsonArray > ()) {
@@ -55,7 +54,7 @@ static void process_message(DynamicJsonDocument & doc)
         const char *item_color = item["color"]; // "#FFFF00", "#0000FF", "#FF0000", "#FF00FF", ...
 
         energy += item_power;
-        next = (num_pixels * energy) / total;
+        int next = (num_pixels * energy) / total;
         printf("led %2d-%2d: %s (%s)\n", index, next, item_color, item_id);
         for (int i = index; i < next; i++) {
             uint32_t rgb = strtoul(item_color + 1, NULL, 16);
