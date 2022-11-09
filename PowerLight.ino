@@ -179,9 +179,9 @@ void setup(void)
     // autodetect the ring size, then show a colour gradient
     num_pixels = ring_autodetect(PIN_LED_OUT, PIN_LED_IN, ledring, MAX_LEDS);
     printf("Detected %d-pixel ring\n", num_pixels);
-    for (int i = 0; i < 256; i++) {
-        int n = num_pixels * i / 256;
-        ledring[n] = CHSV(i, 255, 255);
+    for (int i = 0; i < num_pixels; i++) {
+        int h = i * 256 / num_pixels;
+        ledring[i] = CHSV(h, 255, 255);
     }
     FastLED.setBrightness(32);
     FastLED.show();
