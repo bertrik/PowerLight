@@ -6,9 +6,7 @@
 
 #include "WiFiManager.h"
 #include "FastLED.h"
-
-#include "cmdproc.h"
-#include "editline.h"
+#include "MiniShell.h"
 
 #define printf Serial.printf
 #define POLL_INTERVAL   60000L
@@ -23,7 +21,7 @@ static WiFiClient wifiClient;
 static CRGB ledring[MAX_LEDS + 1];
 static int num_pixels = MAX_LEDS;
 static char espid[64];
-static char line[120];
+static MiniShell shell(&Serial);
 
 static bool fetch_url(const char *host, int port, const char *path, String & response)
 {
@@ -87,7 +85,7 @@ static bool fetch_energy(void)
 static int do_reboot(int argc, char *argv[])
 {
     ESP.restart();
-    return CMD_OK;
+    return 0;
 }
 
 static int do_led(int argc, char *argv[])
@@ -99,13 +97,13 @@ static int do_led(int argc, char *argv[])
     CRGB color = CRGB(rgb);
     FastLED.showColor(color);
 
-    return CMD_OK;
+    return 0;
 }
 
 static int do_get(int argc, char *argv[])
 {
     fetch_energy();
-    return CMD_OK;
+    return 0;
 }
 
 static volatile int int_count;
@@ -165,7 +163,7 @@ static const cmd_t commands[] = {
 static int do_help(int argc, char *argv[])
 {
     show_help(commands);
-    return CMD_OK;
+    return 0;
 }
 
 void setup(void)
@@ -173,7 +171,6 @@ void setup(void)
     Serial.begin(115200);
     printf("\nPOWERLIGHT\n");
 
-    EditInit(line, sizeof(line));
     snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
 
     // autodetect the ring size, then show a colour gradient
@@ -202,27 +199,6 @@ void loop(void)
         fetch_energy();
     }
     // parse command line
-    while (Serial.available()) {
-        char c = Serial.read();
-        bool haveLine = EditLine(c, &c);
-        Serial.write(c);
-        if (haveLine) {
-            int result = cmd_process(commands, line);
-            switch (result) {
-            case CMD_OK:
-                printf("OK\n");
-                break;
-            case CMD_NO_CMD:
-                break;
-            case CMD_UNKNOWN:
-                printf("Unknown command, available commands:\n");
-                show_help(commands);
-                break;
-            default:
-                printf("%d\n", result);
-                break;
-            }
-            printf(">");
-        }
-    }
+    shell.process(">", commands);
 }
+
