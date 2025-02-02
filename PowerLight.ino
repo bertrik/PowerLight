@@ -17,7 +17,7 @@
 
 static WiFiManager wifiManager;
 static WiFiClient wifiClient;
-static Adafruit_NeoPixel ledring(MAX_LEDS, PIN_LED_OUT, NEO_GRB + NEO_KHZ400);
+static Adafruit_NeoPixel ledring(MAX_LEDS + 1, PIN_LED_OUT, NEO_GRB + NEO_KHZ400);
 static int num_pixels = MAX_LEDS;
 static char espid[64];
 static MiniShell shell(&Serial);
@@ -105,23 +105,22 @@ static int do_get(int argc, char *argv[])
     return 0;
 }
 
-#if 0
 static volatile int int_count;
 
-static void ICACHE_RAM_ATTR led_in_interrupt(void)
+static void IRAM_ATTR led_in_interrupt(void)
 {
     int_count++;
 }
 
-static int ring_probe(int pin_out, struct CRGB *data, int n)
+static int ring_probe(Adafruit_NeoPixel &strip, int n)
 {
     int_count = 0;
-    FastLED.addLeds < WS2812B, PIN_LED_OUT, GRB > (data, n);
-    FastLED.showColor(CRGB::Black);
+    strip.updateLength(n);
+    strip.show();
     return int_count;
 }
 
-static int ring_autodetect(int pin_out, int pin_in, struct CRGB *pixels, int maxLeds)
+static int ring_autodetect(Adafruit_NeoPixel &strip, int pin_out, int pin_in, int maxLeds)
 {
     // binary search to find the led ring size
     int low = 1;
@@ -130,7 +129,7 @@ static int ring_autodetect(int pin_out, int pin_in, struct CRGB *pixels, int max
     attachInterrupt(digitalPinToInterrupt(pin_in), led_in_interrupt, FALLING);
     while ((high - low) > 1) {
         int n = (low + high) / 2;
-        int overflow = ring_probe(pin_out, pixels, n);
+        int overflow = ring_probe(strip, n);
         if (overflow) {
             high = n;
         } else {
@@ -140,10 +139,9 @@ static int ring_autodetect(int pin_out, int pin_in, struct CRGB *pixels, int max
     detachInterrupt(digitalPinToInterrupt(pin_in));
 
     // leave initialized
-    ring_probe(pin_out, pixels, low);
+    ring_probe(strip, low);
     return low;
 }
-#endif
 
 static void show_help(const cmd_t * cmds)
 {
@@ -175,10 +173,9 @@ void setup(void)
     snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
 
     // autodetect the ring size, then show a colour gradient
-    // num_pixels = ring_autodetect(PIN_LED_OUT, PIN_LED_IN, ledring, MAX_LEDS);
     ledring.begin();
     ledring.setBrightness(32);
-    num_pixels = 24;
+    num_pixels = ring_autodetect(ledring, PIN_LED_OUT, PIN_LED_IN, MAX_LEDS);
     printf("Detected %d-pixel ring\n", num_pixels);
     for (int i = 0; i < num_pixels; i++) {
         int h = i * 65536 / num_pixels;
