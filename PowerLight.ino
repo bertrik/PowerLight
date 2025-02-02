@@ -1,11 +1,10 @@
 #include <Arduino.h>
 
 #include <ESP8266HTTPClient.h>
-#include <FastLED.h>
 #include <ArduinoJson.h>
 
 #include "WiFiManager.h"
-#include "FastLED.h"
+#include <Adafruit_NeoPixel.h>
 #include "MiniShell.h"
 
 #define printf Serial.printf
@@ -18,7 +17,7 @@
 
 static WiFiManager wifiManager;
 static WiFiClient wifiClient;
-static CRGB ledring[MAX_LEDS + 1];
+static Adafruit_NeoPixel ledring(MAX_LEDS, PIN_LED_OUT, NEO_GRB + NEO_KHZ400);
 static int num_pixels = MAX_LEDS;
 static char espid[64];
 static MiniShell shell(&Serial);
@@ -56,14 +55,13 @@ static void process_message(DynamicJsonDocument & doc)
         printf("led %2d-%2d: %s (%s)\n", index, next, item_color, item_id);
         for (int i = index; i < next; i++) {
             uint32_t rgb = strtoul(item_color + 1, NULL, 16);
-            CRGB color = CRGB(rgb);
             if (i < num_pixels) {
-                ledring[i] = color;
+                ledring.setPixelColor(i, rgb);
             }
         }
         index = next;
     }
-    FastLED.show();
+    ledring.show();
 }
 
 static bool fetch_energy(void)
@@ -93,10 +91,11 @@ static int do_led(int argc, char *argv[])
     if (argc < 2) {
         return -1;
     }
-    int rgb = strtoul(argv[1], NULL, 16);
-    CRGB color = CRGB(rgb);
-    FastLED.showColor(color);
-
+    uint32_t rgb = strtoul(argv[1], NULL, 16);
+    for (int i = 0; i < num_pixels; i++) {
+        ledring.setPixelColor(i, rgb);
+    }
+    ledring.show();
     return 0;
 }
 
@@ -106,6 +105,7 @@ static int do_get(int argc, char *argv[])
     return 0;
 }
 
+#if 0
 static volatile int int_count;
 
 static void ICACHE_RAM_ATTR led_in_interrupt(void)
@@ -143,6 +143,7 @@ static int ring_autodetect(int pin_out, int pin_in, struct CRGB *pixels, int max
     ring_probe(pin_out, pixels, low);
     return low;
 }
+#endif
 
 static void show_help(const cmd_t * cmds)
 {
@@ -174,14 +175,17 @@ void setup(void)
     snprintf(espid, sizeof(espid), "esp8266-powerlight-%06x", ESP.getChipId());
 
     // autodetect the ring size, then show a colour gradient
-    num_pixels = ring_autodetect(PIN_LED_OUT, PIN_LED_IN, ledring, MAX_LEDS);
+    // num_pixels = ring_autodetect(PIN_LED_OUT, PIN_LED_IN, ledring, MAX_LEDS);
+    ledring.begin();
+    ledring.setBrightness(32);
+    num_pixels = 24;
     printf("Detected %d-pixel ring\n", num_pixels);
     for (int i = 0; i < num_pixels; i++) {
-        int h = i * 256 / num_pixels;
-        ledring[i] = CHSV(h, 255, 255);
+        int h = i * 65536 / num_pixels;
+        uint32_t color = Adafruit_NeoPixel::ColorHSV(h, 255, 255);
+        ledring.setPixelColor(i, color);
     }
-    FastLED.setBrightness(32);
-    FastLED.show();
+    ledring.show();
 
     // connect to wifi
     printf("Starting WIFI manager (%s)...\n", WiFi.SSID().c_str());
